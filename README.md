@@ -1,4 +1,4 @@
-# 🤖 OpenClaw Personal Assistant (WhatsApp Bot)
+# 🤖 Bot WhatsApp Personal Assistant (WhatsApp Bot)
 
 Asisten virtual pribadi berbasis WhatsApp yang terintegrasi dengan Google Gemini, Gmail, dan Google Calendar. Sistem ini dirancang untuk otomasi harian, pengelolaan jadwal, dan triage email masuk secara aman.
 
