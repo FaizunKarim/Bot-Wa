@@ -50,15 +50,28 @@ async function initGoogleServices() {
             res.on('end', () => {
                 try {
                     const gist = JSON.parse(data);
-                    const config = JSON.parse(gist.files['config.json'].content);
+                    
+                    // DEBUG BARU: Kita lihat apa isi 'files' sebenarnya
+                    console.log("ISI GIST RESPON:", JSON.stringify(gist.files, null, 2));
+
+                    if (!gist.files) throw new Error("Tidak ada file di Gist!");
+                    
+                    // Cari file pertama yang ada di Gist jika 'config.json' tidak ditemukan
+                    const fileName = Object.keys(gist.files)[0];
+                    const config = JSON.parse(gist.files[fileName].content);
+                    
                     const { client_id, client_secret, redirect_uris } = config.credentials.installed || config.credentials.web;
                     const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
                     oAuth2Client.setCredentials(config.token);
+                    
                     gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
                     calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
                     console.log("OPENCLAW SECURE SYSTEM ONLINE!");
                     resolve();
-                } catch (e) { reject(e); }
+                } catch (e) { 
+                    console.error("DETAIL ERROR:", e.message);
+                    reject(e); 
+                }
             });
         }).on('error', reject);
     });
