@@ -53,9 +53,18 @@ try {
     console.log("Credential berhasil dimuat!");
 } catch (err) {
     console.error("GAGAL MEMUAT CREDENTIALS:", err.message);
-    process.exit(1); 
-}
-// --- AKHIR PERBAIKAN ---
+    try {
+        const credentials = JSON.parse(process.env.CREDENTIALS_JSON);
+        console.log("CREDENTIALS_JSON berhasil dibaca.");
+    } catch (err) {
+        console.error("FORMAT JSON SALAH ATAU KOSONG.");
+    }
+
+    console.log("BOT BERHASIL STARTUP (WALAU BELUM LOGIN)");
+    // Tambahkan loop kosong agar bot tetap hidup dan tidak exit
+    setInterval(() => { console.log("Bot masih hidup..."); }, 10000);
+    }
+    // --- AKHIR PERBAIKAN ---
 
 const chatSessions = {};
 
