@@ -1,0 +1,5 @@
+node_modules/
+wa_session/
+credentials.json
+token.json
+.env
