@@ -1,3 +1,14 @@
+
+---
+title: Bot WA Gweh
+emoji: 🌍
+colorFrom: yellow
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
+
 # 🤖 Bot WhatsApp Personal Assistant
 
 Asisten virtual pribadi berbasis WhatsApp yang terintegrasi dengan Google Gemini, Gmail, dan Google Calendar. Sistem ini dirancang untuk otomasi harian, pengelolaan jadwal, dan triage email masuk secara aman.
@@ -35,12 +46,3 @@ cd <folder-bot>
 npm install
 npm start
 ```
-
----
-title: Bot WA Gweh
-emoji: 🌍
-colorFrom: yellow
-colorTo: blue
-sdk: docker
-pinned: false
----
