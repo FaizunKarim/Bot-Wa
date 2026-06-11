@@ -30,6 +30,11 @@ const model = genAI.getGenerativeModel({
     systemInstruction: systemPrompt 
 });
 
+// --- BAGIAN PERBAIKAN: INISIALISASI GLOBALLY ---
+let oAuth2Client;
+let gmail;
+let calendar;
+
 try {
     console.log("Mencoba membaca credential dari env...");
     if (!process.env.CREDENTIALS_JSON) throw new Error("CREDENTIALS_JSON tidak ditemukan di Secret!");
@@ -39,17 +44,18 @@ try {
     const token = JSON.parse(process.env.TOKEN_JSON);
     
     const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
-    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+    oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
     oAuth2Client.setCredentials(token);
+    
+    gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+    calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
     
     console.log("Credential berhasil dimuat!");
 } catch (err) {
     console.error("GAGAL MEMUAT CREDENTIALS:", err.message);
-    process.exit(1); // Ini akan menghentikan bot dengan rapi agar kita bisa baca errornya di Log
+    process.exit(1); 
 }
-
-const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
+// --- AKHIR PERBAIKAN ---
 
 const chatSessions = {};
 
