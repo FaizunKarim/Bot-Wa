@@ -9,8 +9,15 @@ const { google } = require('googleapis');
 const cron = require('node-cron');
 
 const app = express();
-app.get('/', (req, res) => res.send('OpenClaw Bot Active'));
-app.listen(7860);
+app.get('/', (req, res) => res.send('Bot Active'));
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.listen(7860, '0.0.0.0');
+
+(async () => {
+    // Jalankan init setelah server hidup
+    try { await initGoogleServices(); } catch (e) { console.error(e); }
+    await connectToWhatsApp();
+})();
 
 const ADMIN_NUMBERS = ['6285654448411', '6285643270067', '78086934687993'];
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
