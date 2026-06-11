@@ -11,7 +11,8 @@ const cron = require('node-cron');
 const app = express();
 app.get('/', (req, res) => res.send('Bot Active'));
 app.get('/health', (req, res) => res.status(200).send('OK'));
-app.listen(7860, '0.0.0.0');
+const PORT = process.env.PORT || 7860;
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 
 (async () => {
   try {
