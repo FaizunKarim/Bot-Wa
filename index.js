@@ -7,7 +7,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { google } = require('googleapis');
 const cron = require('node-cron');
 
-const ADMIN_NUMBERS = ['6285654448411@s.whatsapp.net', '6285643270067@s.whatsapp.net'];
+const ADMIN_NUMBERS = ['6285654448411', '6285643270067'];
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const systemPrompt = `Kamu adalah OpenClaw, asisten virtual pribadi milik Faizun Karim.
@@ -50,15 +50,8 @@ async function initGoogleServices() {
             res.on('end', () => {
                 try {
                     const gist = JSON.parse(data);
-                    
-                    // DEBUG BARU: Kita lihat apa isi 'files' sebenarnya
-                    console.log("ISI GIST RESPON:", JSON.stringify(gist.files, null, 2));
-
-                    if (!gist.files) throw new Error("Tidak ada file di Gist!");
-                    
-                    // Cari file pertama yang ada di Gist jika 'config.json' tidak ditemukan
-                    const fileName = Object.keys(gist.files)[0];
-                    const config = JSON.parse(gist.files[fileName].content);
+                    const firstFileKey = Object.keys(gist.files)[0];
+                    const config = JSON.parse(gist.files[firstFileKey].content);
                     
                     const { client_id, client_secret, redirect_uris } = config.credentials.installed || config.credentials.web;
                     const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
@@ -68,10 +61,7 @@ async function initGoogleServices() {
                     calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
                     console.log("OPENCLAW SECURE SYSTEM ONLINE!");
                     resolve();
-                } catch (e) { 
-                    console.error("DETAIL ERROR:", e.message);
-                    reject(e); 
-                }
+                } catch (e) { reject(e); }
             });
         }).on('error', reject);
     });
@@ -95,9 +85,7 @@ async function cekEmailBaru() {
             hasil += `*Dari:* ${from}\n*Subjek:* ${subject}\n---\n`;
         }
         return hasil;
-    } catch (error) {
-        return `Gagal membaca email: ${error.message}`;
-    }
+    } catch (error) { return `Gagal membaca email: ${error.message}`; }
 }
 
 async function cekKalender() {
@@ -120,17 +108,7 @@ async function cekKalender() {
             hasil += `*${index + 1}. ${event.summary}*\nWaktu: ${timeString}\n\n`;
         });
         return hasil;
-    } catch (error) {
-        return `Gagal membaca kalender: ${error.message}`;
-    }
-}
-
-async function kirimRingkasanHarian(sock) {
-    const target = '6285654448411@s.whatsapp.net'; 
-    const email = await cekEmailBaru();
-    const kalender = await cekKalender();
-    const pesan = `☀️ *Selamat Pagi, Faizun!* \n\nIni ringkasan harianmu:\n\n${email}\n\n${kalender}`;
-    await sock.sendMessage(target, { text: pesan });
+    } catch (error) { return `Gagal membaca kalender: ${error.message}`; }
 }
 
 async function connectToWhatsApp() {
@@ -149,13 +127,6 @@ async function connectToWhatsApp() {
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) connectToWhatsApp();
-        } else if (connection === 'open') {
-            cron.schedule('0 7 * * *', () => {
-                kirimRingkasanHarian(sock);
-            }, {
-                scheduled: true,
-                timezone: "Asia/Jakarta"
-            });
         }
     });
 
@@ -168,45 +139,34 @@ async function connectToWhatsApp() {
         const sender = msg.key.remoteJid;
         
         if (textMessage) {
-            const isGroup = sender.endsWith('@g.us');
-            if (isGroup) return;
-
             try {
                 await sock.sendPresenceUpdate('composing', sender);
-
-                if (!chatSessions[sender]) {
-                    chatSessions[sender] = model.startChat();
-                }
-
-                const chat = chatSessions[sender];
-                const result = await chat.sendMessage(textMessage);
+                if (!chatSessions[sender]) chatSessions[sender] = model.startChat();
+                
+                const remoteJid = await sock.onWhatsApp(sender);
+                const actualNumber = remoteJid && remoteJid.length > 0 ? remoteJid[0].jid.split('@')[0] : sender.split('@')[0];
+                const isAuthorized = ADMIN_NUMBERS.some(adminNum => actualNumber.includes(adminNum));
+                
+                const result = await chatSessions[sender].sendMessage(textMessage);
                 const replyText = result.response.text().trim();
-
-                const isAuthorized = ADMIN_NUMBERS.includes(sender);
 
                 if (replyText.includes('[ACTION_CEK_EMAIL]')) {
                     if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: "⏳ Mengambil data..." });
-                        const laporan = await cekEmailBaru();
-                        await sock.sendMessage(sender, { text: laporan });
+                        await sock.sendMessage(sender, { text: await cekEmailBaru() });
                     } else {
                         await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
                     }
-                } 
-                else if (replyText.includes('[ACTION_CEK_KALENDER]')) {
+                } else if (replyText.includes('[ACTION_CEK_KALENDER]')) {
                     if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: "⏳ Menyinkronkan jadwal..." });
-                        const laporan = await cekKalender();
-                        await sock.sendMessage(sender, { text: laporan });
+                        await sock.sendMessage(sender, { text: await cekKalender() });
                     } else {
                         await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
                     }
-                } 
-                else {
+                } else {
                     await sock.sendMessage(sender, { text: replyText });
                 }
             } catch (error) {
-                console.error(error.message);
+                console.error(error);
                 await sock.sendMessage(sender, { text: "Sistem mengalami kendala teknis." });
             }
         }
@@ -214,10 +174,6 @@ async function connectToWhatsApp() {
 }
 
 (async () => {
-    try {
-        await initGoogleServices();
-    } catch (e) {
-        console.error("Gagal inisialisasi Gist, bot tetap hidup:", e.message);
-    }
+    try { await initGoogleServices(); } catch (e) { console.error("Gagal init Gist:", e.message); }
     await connectToWhatsApp();
 })();
