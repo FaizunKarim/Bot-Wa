@@ -1,6 +1,5 @@
 require('dotenv').config();
-const fs = require('fs');
-const axios = require('axios');
+const https = require('https');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
@@ -35,23 +34,34 @@ let gmail;
 let calendar;
 
 async function initGoogleServices() {
-    try {
-        const res = await axios.get(`https://api.github.com/gists/${process.env.GIST_ID}`, {
-            headers: { 'Authorization': `token ${process.env.GIST_TOKEN}` }
-        });
-        const data = JSON.parse(res.data.files['config.json'].content);
-        
-        const { client_id, client_secret, redirect_uris } = data.credentials.installed || data.credentials.web;
-        const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-        oAuth2Client.setCredentials(data.token);
-        
-        gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-        calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
-        console.log("OPENCLAW SECURE SYSTEM ONLINE!");
-    } catch (err) {
-        console.error("Gagal inisialisasi:", err.message);
-        process.exit(1);
-    }
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.github.com',
+            path: `/gists/${process.env.GIST_ID}`,
+            headers: { 
+                'Authorization': `token ${process.env.GIST_TOKEN}`,
+                'User-Agent': 'Node-Bot'
+            }
+        };
+
+        https.get(options, (res) => {
+            let data = '';
+            res.on('data', (c) => data += c);
+            res.on('end', () => {
+                try {
+                    const gist = JSON.parse(data);
+                    const config = JSON.parse(gist.files['config.json'].content);
+                    const { client_id, client_secret, redirect_uris } = config.credentials.installed || config.credentials.web;
+                    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+                    oAuth2Client.setCredentials(config.token);
+                    gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+                    calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
+                    console.log("OPENCLAW SECURE SYSTEM ONLINE!");
+                    resolve();
+                } catch (e) { reject(e); }
+            });
+        }).on('error', reject);
+    });
 }
 
 const chatSessions = {};
@@ -191,6 +201,10 @@ async function connectToWhatsApp() {
 }
 
 (async () => {
-    await initGoogleServices();
+    try {
+        await initGoogleServices();
+    } catch (e) {
+        console.error("Gagal inisialisasi Gist, bot tetap hidup:", e.message);
+    }
     await connectToWhatsApp();
 })();
