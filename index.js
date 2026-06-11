@@ -11,7 +11,10 @@ app.listen(PORT, '0.0.0.0', () => {
     
     // Fork menjalankan bot sebagai proses yang benar-benar terpisah
     const startBot = () => {
-        const bot = fork('./bot.js');
+        const bot = fork('./bot.js', [], {
+            // Isolasi proses agar error tidak merambat ke index.js
+            detached: false 
+        });
         
         bot.on('exit', (code) => {
             console.log(`Bot terhenti (code ${code}). Restarting dalam 5 detik...`);
