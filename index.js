@@ -14,9 +14,12 @@ app.get('/health', (req, res) => res.status(200).send('OK'));
 app.listen(7860, '0.0.0.0');
 
 (async () => {
-    // Jalankan init setelah server hidup
-    try { await initGoogleServices(); } catch (e) { console.error(e); }
+  try {
+    await initGoogleServices();
     await connectToWhatsApp();
+  } catch (e) {
+    console.error("Fatal error:", e);
+  }
 })();
 
 const ADMIN_NUMBERS = ['6285654448411', '6285643270067', '78086934687993'];
