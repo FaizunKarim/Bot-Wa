@@ -30,10 +30,11 @@ const model = genAI.getGenerativeModel({
     systemInstruction: systemPrompt 
 });
 
-const credentials = JSON.parse(fs.readFileSync('credentials.json'));
+const credentials = JSON.parse(process.env.CREDENTIALS_JSON);
 const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
 const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-const token = JSON.parse(fs.readFileSync('token.json'));
+
+const token = JSON.parse(process.env.TOKEN_JSON);
 oAuth2Client.setCredentials(token);
 
 const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
