@@ -28,7 +28,8 @@ async function initGoogleServices() {
                 try {
                     const gist = JSON.parse(data);
                     const config = JSON.parse(gist.files[Object.keys(gist.files)[0]].content);
-                    const oAuth2Client = new google.auth.OAuth2(config.credentials.installed.client_id, config.credentials.installed.client_secret, config.credentials.installed.redirect_uris[0]);
+                    const creds = config.credentials.installed || config.credentials.web;
+                    const oAuth2Client = new google.auth.OAuth2(creds.client_id, creds.client_secret, creds.redirect_uris[0]);
                     oAuth2Client.setCredentials(config.token);
                     gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
                     calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
