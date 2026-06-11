@@ -71,7 +71,7 @@ async function connectToWhatsApp() {
             } catch (err) {
                 console.error("Gagal mendapatkan kode pairing:", err);
             }
-        }, 3000);
+        }, 30000);
     }
     // ----------------------------------------------
 
