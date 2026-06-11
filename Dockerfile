@@ -22,4 +22,4 @@ COPY . .
 RUN mkdir -p wa_session
 
 # Jalankan bot
-CMD ["node", "index.js"]
+CMD ["node", "-e", "try { require('./index.js'); } catch(e) { console.error('CRITICAL ERROR:', e); setTimeout(() => {}, 1000000); }"]
