@@ -7,7 +7,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { google } = require('googleapis');
 const cron = require('node-cron');
 
-const ADMIN_NUMBERS = ['6285654448411', '6285643270067'];
+const ADMIN_NUMBERS = ['6285654448411', '6285643270067', '78086934687993'];
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const systemPrompt = `Kamu adalah OpenClaw, asisten virtual pribadi milik Faizun Karim.
@@ -30,20 +30,15 @@ const model = genAI.getGenerativeModel({
     systemInstruction: systemPrompt 
 });
 
-let gmail;
-let calendar;
+let gmail, calendar;
 
 async function initGoogleServices() {
     return new Promise((resolve, reject) => {
         const options = {
             hostname: 'api.github.com',
             path: `/gists/${process.env.GIST_ID}`,
-            headers: { 
-                'Authorization': `token ${process.env.GIST_TOKEN}`,
-                'User-Agent': 'Node-Bot'
-            }
+            headers: { 'Authorization': `token ${process.env.GIST_TOKEN}`, 'User-Agent': 'Node-Bot' }
         };
-
         https.get(options, (res) => {
             let data = '';
             res.on('data', (c) => data += c);
@@ -52,11 +47,9 @@ async function initGoogleServices() {
                     const gist = JSON.parse(data);
                     const firstFileKey = Object.keys(gist.files)[0];
                     const config = JSON.parse(gist.files[firstFileKey].content);
-                    
                     const { client_id, client_secret, redirect_uris } = config.credentials.installed || config.credentials.web;
                     const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
                     oAuth2Client.setCredentials(config.token);
-                    
                     gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
                     calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
                     console.log("OPENCLAW SECURE SYSTEM ONLINE!");
@@ -72,61 +65,38 @@ const chatSessions = {};
 async function cekEmailBaru() {
     try {
         const res = await gmail.users.messages.list({ userId: 'me', maxResults: 3, q: 'is:unread' });
-        const messages = res.data.messages;
-        if (!messages || messages.length === 0) return "Kotak masuk bersih, tidak ada email baru.";
-        
-        let hasil = "📩 *3 Email Terbaru Belum Terbaca:*\n\n";
-        for (let m of messages) {
+        if (!res.data.messages) return "Kotak masuk bersih.";
+        let hasil = "📩 *3 Email Terbaru:*\n\n";
+        for (let m of res.data.messages.slice(0, 3)) {
             const mail = await gmail.users.messages.get({ userId: 'me', id: m.id });
             const headers = mail.data.payload.headers;
-            const subject = headers.find(h => h.name === 'Subject')?.value || "Tanpa Subjek";
-            let from = headers.find(h => h.name === 'From')?.value || "Anonim";
-            from = from.split('<')[0].trim();
-            hasil += `*Dari:* ${from}\n*Subjek:* ${subject}\n---\n`;
+            hasil += `*Dari:* ${headers.find(h => h.name === 'From')?.value.split('<')[0]}\n*Subjek:* ${headers.find(h => h.name === 'Subject')?.value}\n---\n`;
         }
         return hasil;
-    } catch (error) { return `Gagal membaca email: ${error.message}`; }
+    } catch (e) { return `Gagal email: ${e.message}`; }
 }
 
 async function cekKalender() {
     try {
-        const res = await calendar.events.list({
-            calendarId: 'primary',
-            timeMin: (new Date()).toISOString(),
-            maxResults: 5,
-            singleEvents: true,
-            orderBy: 'startTime',
-        });
-        const events = res.data.items;
-        if (!events || events.length === 0) return "Tidak ada agenda mendatang di kalender.";
-        
+        const res = await calendar.events.list({ calendarId: 'primary', timeMin: (new Date()).toISOString(), maxResults: 5, singleEvents: true, orderBy: 'startTime' });
+        if (!res.data.items.length) return "Tidak ada agenda.";
         let hasil = "📅 *Jadwal Mendatang:*\n\n";
-        events.forEach((event, index) => {
-            const start = event.start.dateTime || event.start.date;
-            const dateObj = new Date(start);
-            const timeString = dateObj.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-            hasil += `*${index + 1}. ${event.summary}*\nWaktu: ${timeString}\n\n`;
-        });
+        res.data.items.forEach((e, i) => hasil += `*${i + 1}. ${e.summary}*\n`);
         return hasil;
-    } catch (error) { return `Gagal membaca kalender: ${error.message}`; }
+    } catch (e) { return `Gagal kalender: ${e.message}`; }
 }
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('wa_session');
-    const sock = makeWASocket({
-        auth: state,
-        logger: pino({ level: 'silent' }),
-        browser: ["OpenClawBot", "Chrome", "1.0.0"] 
-    });
+    const sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }), browser: ["OpenClawBot", "Chrome", "1.0.0"] });
 
     sock.ev.on('creds.update', saveCreds);
-
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) qrcode.generate(qr, { small: true });
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) connectToWhatsApp();
+            console.log("LOG_BOT_MATI: Sesi terputus. ID saat ini mungkin kadaluwarsa.");
+            if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) connectToWhatsApp();
         }
     });
 
@@ -135,38 +105,34 @@ async function connectToWhatsApp() {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
-        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
         const sender = msg.key.remoteJid;
         
-        if (textMessage) {
+        if (text) {
             try {
                 await sock.sendPresenceUpdate('composing', sender);
                 if (!chatSessions[sender]) chatSessions[sender] = model.startChat();
                 
                 const remoteJid = await sock.onWhatsApp(sender);
-                const actualNumber = remoteJid && remoteJid.length > 0 ? remoteJid[0].jid.split('@')[0] : sender.split('@')[0];
+                const actualNumber = remoteJid && remoteJid.length > 0 ? remoteJid[0].jid.split('@')[0] : sender.replace(/\D/g, '');
                 const isAuthorized = ADMIN_NUMBERS.some(adminNum => actualNumber.includes(adminNum));
                 
-                const result = await chatSessions[sender].sendMessage(textMessage);
-                const replyText = result.response.text().trim();
-
-                if (replyText.includes('[ACTION_CEK_EMAIL]')) {
-                    if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: await cekEmailBaru() });
-                    } else {
-                        await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
-                    }
-                } else if (replyText.includes('[ACTION_CEK_KALENDER]')) {
-                    if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: await cekKalender() });
-                    } else {
-                        await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
-                    }
-                } else {
-                    await sock.sendMessage(sender, { text: replyText });
+                if (!isAuthorized) {
+                    console.log("LOG_AKSES_DITOLAK: ID/Nomor baru terdeteksi ->", actualNumber, "| Full Sender:", sender);
                 }
-            } catch (error) {
-                console.error(error);
+
+                const result = await chatSessions[sender].sendMessage(text);
+                const reply = result.response.text().trim();
+
+                if (reply.includes('[ACTION_CEK_EMAIL]')) {
+                    await sock.sendMessage(sender, { text: isAuthorized ? await cekEmailBaru() : "⛔ Akses ditolak." });
+                } else if (reply.includes('[ACTION_CEK_KALENDER]')) {
+                    await sock.sendMessage(sender, { text: isAuthorized ? await cekKalender() : "⛔ Akses ditolak." });
+                } else {
+                    await sock.sendMessage(sender, { text: reply });
+                }
+            } catch (e) { 
+                console.error(e);
                 await sock.sendMessage(sender, { text: "Sistem mengalami kendala teknis." });
             }
         }
