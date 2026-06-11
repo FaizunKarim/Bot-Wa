@@ -1,8 +1,9 @@
 ---
-title: Bot WA Gweh
-emoji: 🌍
-colorFrom: yellow
-colorTo: blue
+title: BOT WA
+emoji: 🚀
+colorFrom: green
+colorTo: red
 sdk: docker
 pinned: false
+license: mit
 ---
