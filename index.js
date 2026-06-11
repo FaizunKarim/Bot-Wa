@@ -1,5 +1,6 @@
 require('dotenv').config();
 const fs = require('fs');
+const axios = require('axios');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
@@ -30,41 +31,28 @@ const model = genAI.getGenerativeModel({
     systemInstruction: systemPrompt 
 });
 
-// --- BAGIAN PERBAIKAN: INISIALISASI GLOBALLY ---
-let oAuth2Client;
 let gmail;
 let calendar;
 
-try {
-    console.log("Mencoba membaca credential dari env...");
-    if (!process.env.CREDENTIALS_JSON) throw new Error("CREDENTIALS_JSON tidak ditemukan di Secret!");
-    if (!process.env.TOKEN_JSON) throw new Error("TOKEN_JSON tidak ditemukan di Secret!");
-
-    const credentials = JSON.parse(process.env.CREDENTIALS_JSON);
-    const token = JSON.parse(process.env.TOKEN_JSON);
-    
-    const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
-    oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-    oAuth2Client.setCredentials(token);
-    
-    gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-    calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
-    
-    console.log("Credential berhasil dimuat!");
-} catch (err) {
-    console.error("GAGAL MEMUAT CREDENTIALS:", err.message);
+async function initGoogleServices() {
     try {
-        const credentials = JSON.parse(process.env.CREDENTIALS_JSON);
-        console.log("CREDENTIALS_JSON berhasil dibaca.");
+        const res = await axios.get(`https://api.github.com/gists/${process.env.GIST_ID}`, {
+            headers: { 'Authorization': `token ${process.env.GIST_TOKEN}` }
+        });
+        const data = JSON.parse(res.data.files['config.json'].content);
+        
+        const { client_id, client_secret, redirect_uris } = data.credentials.installed || data.credentials.web;
+        const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+        oAuth2Client.setCredentials(data.token);
+        
+        gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+        calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
+        console.log("OPENCLAW SECURE SYSTEM ONLINE!");
     } catch (err) {
-        console.error("FORMAT JSON SALAH ATAU KOSONG.");
+        console.error("Gagal inisialisasi:", err.message);
+        process.exit(1);
     }
-
-    console.log("BOT BERHASIL STARTUP (WALAU BELUM LOGIN)");
-    // Tambahkan loop kosong agar bot tetap hidup dan tidak exit
-    setInterval(() => { console.log("Bot masih hidup..."); }, 10000);
-    }
-    // --- AKHIR PERBAIKAN ---
+}
 
 const chatSessions = {};
 
@@ -139,10 +127,6 @@ async function connectToWhatsApp() {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
-            console.log('\n=============================================');
-            console.log('OPENCLAW SECURE SYSTEM ONLINE!');
-            console.log('=============================================\n');
-
             cron.schedule('0 7 * * *', () => {
                 kirimRingkasanHarian(sock);
             }, {
@@ -164,8 +148,6 @@ async function connectToWhatsApp() {
             const isGroup = sender.endsWith('@g.us');
             if (isGroup) return;
 
-            console.log(`\n[JAPRI] Pesan dari ${sender.split('@')[0]}: ${textMessage}`);
-            
             try {
                 await sock.sendPresenceUpdate('composing', sender);
 
@@ -181,20 +163,20 @@ async function connectToWhatsApp() {
 
                 if (replyText.includes('[ACTION_CEK_EMAIL]')) {
                     if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: "⏳ Mengambil data dari Gmail..." });
+                        await sock.sendMessage(sender, { text: "⏳ Mengambil data..." });
                         const laporan = await cekEmailBaru();
                         await sock.sendMessage(sender, { text: laporan });
                     } else {
-                        await sock.sendMessage(sender, { text: "⛔ *AKSES DITOLAK:* Anda tidak memiliki otorisasi untuk membaca email sistem." });
+                        await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
                     }
                 } 
                 else if (replyText.includes('[ACTION_CEK_KALENDER]')) {
                     if (isAuthorized) {
-                        await sock.sendMessage(sender, { text: "⏳ Menyinkronkan jadwal Kalender..." });
+                        await sock.sendMessage(sender, { text: "⏳ Menyinkronkan jadwal..." });
                         const laporan = await cekKalender();
                         await sock.sendMessage(sender, { text: laporan });
                     } else {
-                        await sock.sendMessage(sender, { text: "⛔ *AKSES DITOLAK:* Anda tidak memiliki otorisasi untuk melihat jadwal kalender sistem." });
+                        await sock.sendMessage(sender, { text: "⛔ Akses ditolak." });
                     }
                 } 
                 else {
@@ -208,4 +190,7 @@ async function connectToWhatsApp() {
     });
 }
 
-connectToWhatsApp().catch(console.error);
+(async () => {
+    await initGoogleServices();
+    await connectToWhatsApp();
+})();
